@@ -2,7 +2,7 @@
 
 Hospitationsaufgabe bei NoscAI: **Laborbefunde (LDT & PDF) → strukturierte, geprüfte Laborwerte**
 
-Dauer: **3 Tage** · Schwerpunkt: **AI-Automatisierung & Evaluation** (Full Stack nur als schlanke Review-Oberfläche)
+Dauer: **3 Tage** · Schwerpunkt: **AI-Automatisierung & Evaluation** (plus eine schlanke Review-Oberfläche in React)
 
 ---
 
@@ -111,7 +111,9 @@ Wahrheit, das PDF ist das, was ein Modell ohne LDT zu sehen bekäme.
 ## Tag 3: Human-in-the-Loop & Demo
 
 - Ein **FastAPI-Endpoint**, der eine LDT- oder PDF-Datei annimmt und die geprüften Werte zurückgibt.
-- Eine kleine **Review-Oberfläche** (Streamlit reicht völlig; React ist Bonus, kein Muss):
+- Eine kleine **Review-Oberfläche in React** (Vite + TypeScript; eine UI-Library wie shadcn/ui oder MUI ist erlaubt,
+  Design ist Nebensache):
+  - Upload einer LDT- oder PDF-Datei
   - Befund-PDF und extrahierte Werte nebeneinander, Quelle sichtbar (LDT oder LLM)
   - Werte mit niedriger Confidence oder verletzter Regel sind hervorgehoben
   - Werte können bestätigt oder korrigiert werden
@@ -148,7 +150,8 @@ Feature-Sammlung. Wenn du priorisieren musst: **Tag 1 und 2 sind der Kern.**
 ## Rahmen
 
 - **Nur synthetische bzw. KBV-Testdaten.** Keine echten Befunde, keine echten Patientendaten, auch nicht als Beispiel.
-- Sprache: Python (empfohlen: `uv`, FastAPI, Pydantic). Freie Wahl der Libraries.
+- Backend / AI-Pipeline: Python (empfohlen: `uv`, FastAPI, Pydantic). Frontend: React + TypeScript (Vite).
+  Ansonsten freie Wahl der Libraries.
 - LLM-Zugang (API-Key und Modell) stellen wir bereit. Keys gehören in eine `.env` und werden **niemals committet**
   (`.env` steht in `.gitignore`, Vorlage: `.env.example`).
 - AI-Coding-Tools (Claude Code, Cursor, Copilot, …) sind ausdrücklich erlaubt. Du solltest aber jede Zeile erklären
