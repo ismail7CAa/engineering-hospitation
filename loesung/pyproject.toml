@@ -1,0 +1,21 @@
+[project]
+name = "engineering-hospitation"
+version = "0.1.0"
+description = "Laborbefunde aus LDT und PDF strukturiert extrahieren und evaluieren"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "pydantic>=2,<3",
+    "uvicorn",
+    "python-multipart",
+    "python-dotenv",
+    "pypdf",
+    "reportlab",
+]
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
