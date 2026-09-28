@@ -1,0 +1,2 @@
+*.ldt -text -diff
+*.pdf binary
