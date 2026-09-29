@@ -11,36 +11,11 @@ import hashlib
 from io import BytesIO
 from pathlib import Path
 
-from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
+from .laborwert_schema import Laborwert, Referenzbereich
 from .ldt_sparser import LDTFeld, LDTObjekt, parse_dokument
 from .ldt_validator import validiere_ldt
-
-
-class Referenzbereich(BaseModel):
-    spezifikation: str | None = None
-    untergrenze: str | None = None
-    obergrenze: str | None = None
-    untergrenze_einheit: str | None = None
-    obergrenze_einheit: str | None = None
-    text: list[str] = Field(default_factory=list)
-    flag: str | None = None
-
-
-class Laborwert(BaseModel):
-    befund_index: int
-    ergebnis_id: str | None = None
-    test_ident: str | None = None
-    analyt: str | None = None
-    wert: str
-    einheit: str | None = None
-    einheitensystem: str | None = None
-    referenzen: list[Referenzbereich] = Field(default_factory=list)
-    ergebnisstatus: str | None = None
-    quelle: str = 'LDT'
-    zeile: int
-    objektpfad: str
 
 
 def direkte_felder(objekt):
@@ -52,7 +27,9 @@ def erster(objekt, fk):
 
 
 def referenz(objekt):
-    ref = Referenzbereich(spezifikation=erster(objekt, '8424'), flag=erster(objekt, '8422'))
+    ref = Referenzbereich(spezifikation=erster(objekt, '8424'), untergrenze=None, obergrenze=None,
+                          untergrenze_einheit=None, obergrenze_einheit=None, text=[],
+                          flag=erster(objekt, '8422'))
     grenze = None
     for x in direkte_felder(objekt):
         if x.feldkennung == '8460':
@@ -88,7 +65,10 @@ def extrahiere(daten: bytes):
                         befund_index=befund_index, ergebnis_id=erster(objekt, '7304'),
                         test_ident=erster(objekt, '8410'),
                         analyt=erster(objekt, '8411') or erster(objekt, '7366'), wert=x.wert,
-                        ergebnisstatus=erster(objekt, '8418'), zeile=x.zeilennummer, objektpfad=pfad,
+                        einheit=None, einheitensystem=None, referenzen=[],
+                        ergebnisstatus=erster(objekt, '8418'), quelle='LDT', seite=None,
+                        confidence=None, begruendung='Deterministisch aus LDT-Feld 8420 gelesen.',
+                        zeile=x.zeilennummer, objektpfad=pfad,
                     )
                     werte.append(aktuell)
                     # Nur die direkt zu diesem Wert gehörige Einheit auslesen.

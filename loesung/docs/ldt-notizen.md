@@ -134,58 +134,51 @@ In `Z01_UseCase05_Befund_mitPDF.ldt`, Zeilen 240–258:
 wir keine konkrete medizinische Einheit erfinden.
 Ab Zeile 363 steht ein Anhang mit `Obj_0010`, `8242`, `Obj_0068` und vielen
 `6329`-Zeilen; am Ende folgt `6303=PDF`.
-Das wurde hier strukturell gelesen, noch nicht durch einen implementierten
-Anhangsextraktor verarbeitet.
+Das wird inzwischen durch `src/ldt_extractor.py` objektbezogen extrahiert:
+die `6329`-Zeilen werden pro Anhang zusammengefuehrt, Base64-dekodiert und
+als PDF auf Lesbarkeit geprueft.
 
 **Versionsabweichung:** Alle sechs gelieferten LDT-Dateien deklarieren in
 `0001` die Version `LDT3.2.19`. Die beigefügte Spezifikation beschreibt
 3.2.15; E001 auf S. 78 nennt entsprechend `LDT3.2.15`.
 Eine Abweichung von unseren 3.2.15-Regeln beweist bei diesen Dateien noch
-keinen Laborfehler. Versionskonflikte separat melden; keine vollständige
-3.2.19-Konformität behaupten. Für die endgültige Prüfung der KBV-Beispiele
-ist die passende Spezifikation bzw. ein belegter Versionsvergleich noch offen.
+keinen Laborfehler. Versionskonflikte separat melden; keine vollstaendige
+3.2.19-Konformitaet behaupten. Die KBV-Beispiele werden deshalb verarbeitet
+und mit 3.2.15-Hinweisen versehen, aber nicht als 3.2.19-konform bewertet.
 
-## 6. Konsequenzen für die nächste Umsetzung
+## 6. Umsetzung fuer Tag 1
 
-1. ISO-8859-15-Dekodierung ergänzen und Rohbytes zur Nachvollziehbarkeit behalten.
-2. Satz-/Objekthierarchie mit Zeilennummern erfassen; Version separat ausweisen.
-3. Zunächst `Obj_0060` samt Normalwerten und Einheiten auslesen.
-4. Anhangsextraktion anhand des Objektkontexts implementieren.
-5. Vor dem Generator auch die vollständigen Pflichtfelder der verwendeten
-   Header-, Patienten-, Material-, Befund- und Abschlussobjekte sowie die
-   Prüfsummenregel für `9300` durchgehen. Die hier gelesenen Ausschnitte allein
-   reichen noch nicht, um vollständige LDT-Konformität zu behaupten.
-6. Danach 18 Gold-Datensätze mit festem Seed erzeugen und LDT/PDF daraus rendern.
-   Gewollte Regelverletzungen separat dokumentieren. Ergebnis-Dezimalkomma,
-   fehlende Referenzbereiche und dimensionslose Werte differenziert behandeln.
+Die gelesenen Spezifikationsstellen wurden fuer Tag 1 in vier Bausteine
+ueberfuehrt:
 
-Stand der Umsetzung: `parse_ldt` prüft den Zeilenrahmen; `LDTFeld.wert`
-dekodiert ISO-8859-15 unter Erhalt der Rohbytes. `parse_dokument` baut die
-verschachtelte Satz-/Objektstruktur auf und prüft passende Abschlussfelder.
-Reihenfolge, Wiederholungen und Zeilennummern bleiben erhalten. Abweichende
-Versionen werden als Hinweise ausgewiesen.
+1. `src/ldt_sparser.py` prueft den Zeilenrahmen, dekodiert ISO-8859-15 unter
+   Erhalt der Rohbytes und baut die Satz-/Objekthierarchie mit Zeilennummern.
+2. `src/ldt_validator.py` meldet Feldpositionen, Pflichtfelder, Vorkommen,
+   Wertebereiche, Datums-/Zeitformate, Satzfolge und die SHA-1-Pruefsumme `9300`.
+3. `src/ldt_extractor.py` liest klinisch-chemische Werte aus `Obj_0060` mit
+   Einheiten, Referenzbereichen, Flags und Herkunftspfad aus und extrahiert
+   eingebettete PDFs.
+4. `src/generate_dataset.py` erzeugt 18 synthetische Gold/LDT/PDF-Paare mit
+   festem Seed; `src/check_tag1.py` gleicht die gespeicherten Artefakte gegen
+   Gold und gegen die eingebetteten PDFs ab.
 
-`src/ldt_validator.py` ergänzt eine separate Teilprüfung für `Obj_0060`,
-`Obj_0042`, `Obj_0010` und `Obj_0068`: direkte Feldzugehörigkeit,
-unbedingte Pflichtfelder, ausgewählte objektweite Häufigkeiten, Folgeobjekte
-der dort erlaubten Attribute, K001/K002/K055/K099/K100, E070 und die
-Vereinigung der Flag-Codes aus E005. Die numerische/nichtnumerische
-Unterscheidung der Flags ist noch offen. Wiederholte Einheitensysteme werden
-jeweils lokal geprüft, nicht über das ganze Objekt zusammengefasst.
+Der synthetische Datensatz enthaelt 18 Befunde, 144 Laborwerte, drei PDF-Layouts,
+drei mehrseitige PDFs und drei absichtlich fehlerhafte LDT-Dateien. Die Fehler
+werden gemeldet und nicht automatisch repariert. Der Generator nutzt keine echten
+Patientendaten, keine LLM-generierten Messwerte und keine KBV-Dateien als Vorlage.
 
-Die vollständige Feldreihenfolge und Vorkommenshierarchie, weitere bedingte
-Pflichtfelder (etwa K075/K076), K054, Satzfolgen und Prüfsummen sind noch
-nicht umgesetzt. Nicht abgedeckte Objekttypen werden ausgewiesen;
-`vollstaendig` bleibt `false`. Bei fehlender/abweichender Version werden
-Regelverletzungen nur als Prüfhinweise gegen 3.2.15 gemeldet.
+Nicht abgedeckte Objekttypen werden ausgewiesen; `vollstaendig` bleibt `false`.
+Bei fehlender oder abweichender Version werden Regelverletzungen nur als
+Pruefhinweise gegen 3.2.15 gemeldet. Die aktuelle Grenze der Umsetzung steht
+in `loesung/README.md`.
 
 
 ### Erweiterte Validierung
 
-Zusätzlich implementiert: geordnete Vorkommenshierarchien der vier Objekttypen
-in `src/ldt_regeln.py`, Satzfolge für Befundpakete (S. 22), SHA-1 über die
-Originalbytes vor 9300 (E157, S. 98), K053/K054 (S. 108), K075 (S. 109),
-K076 (S. 110), K106 (S. 113), numerische Grenzformate und E005 mit Bezug
-zum jeweiligen Ergebniswert. Frühere Aussagen zu diesen offenen Punkten
-sind damit überholt. Vollständige Konformität wird weiterhin nicht behauptet;
-aktuelle Grenzen stehen in der eigenen README.
+Implementiert sind geordnete Vorkommenshierarchien fuer die verwendeten
+klinischen, Anhangs- und Metadatenobjekte in `src/ldt_regeln.py`, Satzfolge
+fuer Befundpakete (S. 22), SHA-1 ueber die Originalbytes vor 9300 (E157,
+S. 98), K053/K054 (S. 108), K075 (S. 109), K076 (S. 110), K106 (S. 113),
+numerische Grenzformate und E005 mit Bezug zum jeweiligen Ergebniswert.
+Weitere implementierte Kontextregeln sind in der eigenen README aufgefuehrt.
+Vollstaendige Standardkonformitaet wird weiterhin nicht behauptet.

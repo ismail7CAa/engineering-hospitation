@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pypdf import PdfReader
 
-from src.generate_dataset import gold_befunde, pdf_rendern, ldt_rendern, generieren
+from src.generate_dataset import SCAN_IDS, gold_befunde, pdf_rendern, ldt_rendern, generieren, scan_pdf_rendern
 from src.ldt_extractor import extrahiere
 from src.ldt_sparser import parse_dokument
 from src.ldt_validator import validiere_ldt
@@ -64,12 +64,19 @@ def test_committed_artifacts_match_generator():
     root = Path(__file__).resolve().parents[1] / 'data/synthetisch'
     manifest = json.loads((root / 'manifest.json').read_text())
     assert len(manifest['befunde']) == 18
+    assert manifest['scan_simulationen'] == 3
     for gold in gold_befunde():
         path = root / gold['id']
         assert json.loads((path / 'gold.json').read_text()) == gold
         pdf = pdf_rendern(gold)
         assert (path / 'befund.pdf').read_bytes() == pdf
         assert (path / 'befund.ldt').read_bytes() == ldt_rendern(gold, pdf)
+        if gold['id'] in SCAN_IDS:
+            scan = scan_pdf_rendern(gold)
+            assert (path / 'befund_scan.pdf').read_bytes() == scan
+            assert len(PdfReader(BytesIO(scan)).pages) == gold['seiten']
+        else:
+            assert not (path / 'befund_scan.pdf').exists()
 
 
 def test_broken_attachment_is_reported_without_crashing_or_repair():

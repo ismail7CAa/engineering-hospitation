@@ -26,6 +26,9 @@
       ],
       "ergebnisstatus": "06",
       "quelle": "LDT",
+      "seite": null,
+      "confidence": null,
+      "begruendung": "Deterministisch aus LDT-Feld 8420 gelesen.",
       "zeile": 243,
       "objektpfad": "8205/Obj_0035@233/Obj_0060@235"
     },
@@ -52,6 +55,9 @@
       ],
       "ergebnisstatus": "06",
       "quelle": "LDT",
+      "seite": null,
+      "confidence": null,
+      "begruendung": "Deterministisch aus LDT-Feld 8420 gelesen.",
       "zeile": 293,
       "objektpfad": "8205/Obj_0035@233/Obj_0060@285"
     }

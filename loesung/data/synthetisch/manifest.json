@@ -1,6 +1,7 @@
 {
   "seed": 20260928,
   "anzahl": 18,
+  "scan_simulationen": 3,
   "befunde": [
     {
       "id": "SYN-001",
@@ -32,7 +33,13 @@
       "seiten": 1,
       "fehler": [],
       "sha256_pdf": "11de09c92323e329fe182ed7e2b0146bdd1d73f230553ac082af4f86c710e5c4",
-      "sha256_ldt": "0c649f9f827f14c4f6605fa24c91098f19fd56256061807a14297521edd36db7"
+      "sha256_ldt": "0c649f9f827f14c4f6605fa24c91098f19fd56256061807a14297521edd36db7",
+      "scan_pdf": {
+        "datei": "befund_scan.pdf",
+        "rotation_grad": -1.6,
+        "rauschen_pixel": 2800,
+        "sha256": "bcc4f91130708c1faa9af5afbd89b512f7f9862d4666707d8d06ecdfe1b1d013"
+      }
     },
     {
       "id": "SYN-005",
@@ -88,7 +95,13 @@
       "seiten": 1,
       "fehler": [],
       "sha256_pdf": "c5a97eab00073b3529c6f90dad26200688a69fb3de851f821472fe70b47b2893",
-      "sha256_ldt": "4617d7da49493312381c3eddb78d9db06d021f2cec775f0bb5e8076d7fbf8d0f"
+      "sha256_ldt": "4617d7da49493312381c3eddb78d9db06d021f2cec775f0bb5e8076d7fbf8d0f",
+      "scan_pdf": {
+        "datei": "befund_scan.pdf",
+        "rotation_grad": 1.2,
+        "rauschen_pixel": 2800,
+        "sha256": "877fdf04e79ac7a5e69d793b185cbf0c5138bc60e02c47e767a5cc81ccf89fc1"
+      }
     },
     {
       "id": "SYN-012",
@@ -148,7 +161,13 @@
         }
       ],
       "sha256_pdf": "d390ec1f3ed55565f91f8d0d9dac511f5a18ad7131f75fb396fa15ae5490bd61",
-      "sha256_ldt": "b8dd0b74616955edc8b1bb639ee009f5e33373ee22188e8a1587035a7640c6bd"
+      "sha256_ldt": "b8dd0b74616955edc8b1bb639ee009f5e33373ee22188e8a1587035a7640c6bd",
+      "scan_pdf": {
+        "datei": "befund_scan.pdf",
+        "rotation_grad": -0.9,
+        "rauschen_pixel": 2800,
+        "sha256": "ae59ee595bb19985876f4831a73b92404f87b274bf74413424b151b7a29dee4b"
+      }
     },
     {
       "id": "SYN-018",

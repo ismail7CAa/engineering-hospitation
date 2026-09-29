@@ -14,9 +14,12 @@ from pathlib import Path
 from textwrap import wrap
 
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
+from PIL import Image, ImageDraw, ImageFont
 
 SEED = 20260928
+SCAN_IDS = {'SYN-004': -1.6, 'SYN-011': 1.2, 'SYN-017': -0.9}
 ANALYTE = [
     ('Kreatinin', ['Krea', 'Kreatinin'], [('mg/dl', '0.6', '1.2'), ('µmol/l', '53', '106')]),
     ('Glukose', ['Glucose', 'Glukose'], [('mg/dl', '70', '100'), ('mmol/l', '3.9', '5.6')]),
@@ -114,6 +117,59 @@ def pdf_rendern(gold):
     return stream.getvalue()
 
 
+def _font(size, bold=False):
+    name = 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'
+    try:
+        return ImageFont.truetype(name, size)
+    except OSError:
+        return ImageFont.load_default()
+
+
+def scan_pdf_rendern(gold):
+    """Zusaetzliche Scan-Simulation: Bild-PDF mit Rotation und Rauschen."""
+    rng = random.Random(f"{SEED}:{gold['id']}:scan")
+    pages = []
+    width, height = 1240, 1754
+    for seite in range(1, gold['seiten'] + 1):
+        img = Image.new('RGB', (width, height), 'white')
+        draw = ImageDraw.Draw(img)
+        draw.text((75, 70), f"Laborbefund {gold['id']}", fill=(20, 20, 20), font=_font(34, True))
+        draw.text((75, 125), f"{gold['patient']['vorname']} {gold['patient']['nachname']} | 28.09.2026",
+                  fill=(35, 35, 35), font=_font(22))
+        draw.text((75, 165), 'Fiktiver Testbefund - Scan-Simulation', fill=(65, 65, 65), font=_font(20))
+        y = 245
+        for row in [x for x in gold['laborwerte'] if x['seite'] == seite]:
+            ref = row['referenz']
+            ref_text = f"{ref['untergrenze']} - {ref['obergrenze']} {row['einheit']}" if ref else 'k.A.'
+            draw.text((80, y), row['analyt'], fill=(15, 15, 15), font=_font(24, True))
+            draw.text((390, y), f"{row['wert']} {row['einheit']}", fill=(15, 15, 15), font=_font(24))
+            draw.text((650, y), f"Ref: {ref_text}", fill=(35, 35, 35), font=_font(21))
+            draw.text((1030, y), f"Flag {row['flag']}", fill=(35, 35, 35), font=_font(21))
+            y += 92
+        draw.text((75, height - 190), 'Glukose 999 mg/dl ist Schulungstext und kein Messwert.',
+                  fill=(70, 70, 70), font=_font(20))
+        draw.text((width - 230, height - 80), f"Seite {seite} / {gold['seiten']}", fill=(50, 50, 50), font=_font(18))
+
+        pixels = img.load()
+        for _ in range(2800):
+            x, y = rng.randrange(width), rng.randrange(height)
+            shade = rng.randrange(185, 256)
+            pixels[x, y] = (shade, shade, shade)
+        img = img.rotate(SCAN_IDS[gold['id']], resample=Image.Resampling.BICUBIC, fillcolor='white')
+        pages.append(img)
+    stream = BytesIO()
+    canvas = Canvas(stream, pagesize=A4, invariant=1, pageCompression=1)
+    canvas.setTitle(f"Scan-Simulation {gold['id']}")
+    for page in pages:
+        png = BytesIO()
+        page.save(png, format='PNG')
+        png.seek(0)
+        canvas.drawImage(ImageReader(png), 0, 0, width=A4[0], height=A4[1])
+        canvas.showPage()
+    canvas.save()
+    return stream.getvalue()
+
+
 def objekt(attr, label, oid, inhalt):
     return [(attr, label), ('8002', oid), *inhalt, ('8003', oid)]
 
@@ -196,7 +252,7 @@ def ldt_rendern(gold, pdf):
 def generieren(output):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    manifest = {'seed': SEED, 'anzahl': 18, 'befunde': []}
+    manifest = {'seed': SEED, 'anzahl': 18, 'scan_simulationen': len(SCAN_IDS), 'befunde': []}
     for gold in gold_befunde():
         ordner = output / gold['id']
         ordner.mkdir(exist_ok=True)
@@ -205,10 +261,18 @@ def generieren(output):
         (ordner / 'gold.json').write_text(json.dumps(gold, ensure_ascii=False, indent=2) + '\n')
         (ordner / 'befund.pdf').write_bytes(pdf)
         (ordner / 'befund.ldt').write_bytes(ldt)
-        manifest['befunde'].append({'id': gold['id'], 'layout': gold['layout'], 'seiten': gold['seiten'],
-                                    'fehler': gold['absichtliche_fehler'],
-                                    'sha256_pdf': hashlib.sha256(pdf).hexdigest(),
-                                    'sha256_ldt': hashlib.sha256(ldt).hexdigest()})
+        entry = {'id': gold['id'], 'layout': gold['layout'], 'seiten': gold['seiten'],
+                 'fehler': gold['absichtliche_fehler'],
+                 'sha256_pdf': hashlib.sha256(pdf).hexdigest(),
+                 'sha256_ldt': hashlib.sha256(ldt).hexdigest()}
+        if gold['id'] in SCAN_IDS:
+            scan = scan_pdf_rendern(gold)
+            (ordner / 'befund_scan.pdf').write_bytes(scan)
+            entry['scan_pdf'] = {'datei': 'befund_scan.pdf',
+                                 'rotation_grad': SCAN_IDS[gold['id']],
+                                 'rauschen_pixel': 2800,
+                                 'sha256': hashlib.sha256(scan).hexdigest()}
+        manifest['befunde'].append(entry)
     (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
     return manifest
 

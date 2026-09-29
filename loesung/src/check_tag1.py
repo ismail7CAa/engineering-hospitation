@@ -39,6 +39,16 @@ def check_tag1(root=ROOT):
         pdf_pages = [p.extract_text() or '' for p in PdfReader(folder / 'befund.pdf').pages]
         if len(pdf_pages) != gold['seiten']:
             errors.append('PDF-Seitenzahl weicht ab')
+        scan = entry.get('scan_pdf')
+        if scan:
+            scan_path = folder / scan['datei']
+            if not scan_path.exists():
+                errors.append('Scan-PDF fehlt')
+            else:
+                if hashlib.sha256(scan_path.read_bytes()).hexdigest() != scan['sha256']:
+                    errors.append('Scan-PDF-Hash stimmt nicht')
+                if len(PdfReader(scan_path).pages) != gold['seiten']:
+                    errors.append('Scan-PDF-Seitenzahl weicht ab')
         for expected, observed in zip(gold['laborwerte'], actual):
             for key in ('ergebnis_id', 'test_ident', 'analyt', 'wert'):
                 if observed[key] != expected[key]:
@@ -68,6 +78,7 @@ def check_tag1(root=ROOT):
             errors.append('Nicht abgedeckter Objekttyp im synthetischen Befund')
         summary['synthetische_befunde'].append({
             'id': gold['id'], 'laborwerte': len(actual), 'pdf_seiten': len(pdf_pages),
+            'scan_pdf': bool(scan),
             'layout': gold['layout'], 'erwartete_regeln': sorted(expected_rules),
             'gemeldete_regeln': sorted(found), 'abweichungen': errors,
         })
@@ -88,6 +99,7 @@ def check_tag1(root=ROOT):
         'befunde': len(summary['synthetische_befunde']),
         'laborwerte': sum(x['laborwerte'] for x in summary['synthetische_befunde']),
         'pdf_seiten': sum(x['pdf_seiten'] for x in summary['synthetische_befunde']),
+        'scan_pdfs': sum(1 for x in summary['synthetische_befunde'] if x['scan_pdf']),
         'befunde_mit_absichtlichen_fehlern': sum(bool(x['erwartete_regeln']) for x in summary['synthetische_befunde']),
         'unerwartete_abweichungen': sum(len(x['abweichungen']) for x in summary['synthetische_befunde']),
         'kbv_dateien': len(summary['kbv_befunde']),

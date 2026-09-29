@@ -11,6 +11,8 @@ dependencies = [
     "python-dotenv",
     "pypdf",
     "reportlab",
+    "openai>=3.20.0",
+    "pymupdf>=1.28.2",
 ]
 
 [dependency-groups]
