@@ -63,12 +63,13 @@ def gold_befunde():
                 'referenz': None if (n + i) % 5 == 0 else {'untergrenze': low, 'obergrenze': high},
                 'flag': flag, 'material': 'EDTA-Blut' if kanonisch == 'HbA1c' else 'Serum', 'seite': 2 if gold['seiten'] == 2 and i >= 4 else 1,
             })
+        # Absichtliche Fehler
         if n == 16:
-            gold['absichtliche_fehler'] = [{'typ': 'fehlende_einheit', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'K002'}]
+            gold['absichtliche_fehler'] = [{'typ': 'fehlende_einheit', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'K002'}]  # Einheit fehlt
         elif n == 17:
-            gold['absichtliche_fehler'] = [{'typ': 'flag_an_falscher_stelle', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'FELDPOSITION'}]
+            gold['absichtliche_fehler'] = [{'typ': 'flag_an_falscher_stelle', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'FELDPOSITION'}]  # Flag steht falsch
         elif n == 18:
-            gold['absichtliche_fehler'] = [{'typ': 'doppelte_ergebnis_id', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'VORKOMMEN'}]
+            gold['absichtliche_fehler'] = [{'typ': 'doppelte_ergebnis_id', 'ergebnis_id': gold['laborwerte'][0]['ergebnis_id'], 'regel': 'VORKOMMEN'}]  # Ergebnis-ID doppelt
         yield gold
 
 

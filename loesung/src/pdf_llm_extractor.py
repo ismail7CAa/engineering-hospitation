@@ -58,6 +58,7 @@ def _parse_mit_response_format(client, model, seiten, prompt):
         model=model,
         messages=_messages(seiten, prompt),
         response_format=LaborbefundExtraktion,
+        temperature=0,
     )
     parsed = completion.choices[0].message.parsed
     if parsed is None:
@@ -80,6 +81,7 @@ def _parse_mit_tool(client, model, seiten, prompt):
             },
         }],
         tool_choice={'type': 'function', 'function': {'name': 'extrahiere_laborbefund'}},
+        temperature=0,
     )
     calls = completion.choices[0].message.tool_calls or []
     if not calls:

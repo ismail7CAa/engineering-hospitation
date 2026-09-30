@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 from .laborwert_schema import LaborbefundExtraktion, Laborwert, Referenzbereich
 from .normalizer import normalisiere_laborwert
 from .pdf_llm_extractor import extrahiere_pdf_mit_llm, extrahiere_seitentexte_mit_llm
+from .pdf_vision_extractor import extrahiere_pdf_bild_mit_llm
 from .scan_ocr import ocr_scan_pdf
 
 
@@ -153,13 +156,19 @@ def _match_gold(gold_values, pred_values):
     return pairs, missing, unmatched
 
 
+def _flag_value(wert):
+    if wert.referenzen and wert.referenzen[0].flag is not None:
+        return wert.referenzen[0].flag
+    return wert.ergebnisstatus
+
+
 def _field_ok(field, gold, pred):
     if field == 'analyt':
         return normalisiere_laborwert(gold).analyt_kanonisch == normalisiere_laborwert(pred).analyt_kanonisch
     if field == 'referenz':
         return _ref_key(gold) == _ref_key(pred)
     if field == 'flag':
-        return (gold.referenzen[0].flag if gold.referenzen else None) == (pred.referenzen[0].flag if pred.referenzen else None)
+        return _canon(_flag_value(gold)) == _canon(_flag_value(pred))
     if field == 'wert_einheit_exact':
         return _canon(gold.wert) == _canon(pred.wert) and _canon(gold.einheit) == _canon(pred.einheit)
     return _canon(getattr(gold, field)) == _canon(getattr(pred, field))
@@ -211,13 +220,37 @@ def _aggregate(items):
     return result
 
 
+def _load_or_run_llm_variant(folder, *, run_llm, output_name: str, model: str | None = None, prompt='kurz'):
+    out = folder / output_name
+    if out.exists():
+        return LaborbefundExtraktion.model_validate_json(out.read_text())
+    if not run_llm or not model:
+        return None
+    result = extrahiere_pdf_mit_llm((folder / 'befund.pdf').read_bytes(), model=model, prompt_variante=prompt)
+    out.write_text(result.model_dump_json(indent=2) + '\n')
+    return result
+
+
 def _load_or_run_llm(folder, *, run_llm):
-    out = folder / 'pdf_llm.json'
+    return _load_or_run_llm_variant(folder, run_llm=run_llm, output_name='pdf_llm.json',
+                                    model=os.getenv('LLM_MODEL'), prompt='kurz')
+
+
+def _load_or_run_alt_llm(folder, *, run_llm):
+    return _load_or_run_llm_variant(folder, run_llm=run_llm, output_name='pdf_llm_alt.json',
+                                    model=os.getenv('LLM_ALT_MODEL'), prompt='kurz')
+
+
+def _load_or_run_scan_vision_llm(folder, *, run_llm):
+    scan = folder / 'befund_scan.pdf'
+    if not scan.exists():
+        return None
+    out = folder / 'scan_vision_llm.json'
     if out.exists():
         return LaborbefundExtraktion.model_validate_json(out.read_text())
     if not run_llm:
         return None
-    result = extrahiere_pdf_mit_llm((folder / 'befund.pdf').read_bytes())
+    result = extrahiere_pdf_bild_mit_llm(scan.read_bytes())
     out.write_text(result.model_dump_json(indent=2) + '\n')
     return result
 
@@ -240,9 +273,10 @@ def _load_or_run_scan_llm(folder, *, run_llm):
 
 
 def evaluiere_dataset(root: Path, *, run_llm=False, limit: int | None = None):
-    variants = {'regel_text_pdf': [], 'llm_structured_text': [], 'scan_ocr_llm': []}
-    run_errors = {'regel_text_pdf': [], 'llm_structured_text': [], 'scan_ocr_llm': []}
-    skipped = {'regel_text_pdf': [], 'llm_structured_text': [], 'scan_ocr_llm': []}
+    load_dotenv()
+    variants = {'regel_text_pdf': [], 'llm_structured_text': [], 'llm_structured_alt_model': [], 'scan_ocr_llm': [], 'scan_vision_llm': []}
+    run_errors = {'regel_text_pdf': [], 'llm_structured_text': [], 'llm_structured_alt_model': [], 'scan_ocr_llm': [], 'scan_vision_llm': []}
+    skipped = {'regel_text_pdf': [], 'llm_structured_text': [], 'llm_structured_alt_model': [], 'scan_ocr_llm': [], 'scan_vision_llm': []}
     folders = sorted(path for path in root.glob('SYN-*') if path.is_dir())
     if limit:
         folders = folders[:limit]
@@ -262,6 +296,15 @@ def evaluiere_dataset(root: Path, *, run_llm=False, limit: int | None = None):
         else:
             skipped['llm_structured_text'].append(gold['id'])
         try:
+            alt_llm = _load_or_run_alt_llm(folder, run_llm=run_llm)
+        except Exception as exc:
+            run_errors['llm_structured_alt_model'].append({'id': gold['id'], 'fehler': type(exc).__name__})
+            alt_llm = None
+        if alt_llm is not None:
+            variants['llm_structured_alt_model'].append(evaluiere_befund(gold, alt_llm))
+        else:
+            skipped['llm_structured_alt_model'].append(gold['id'])
+        try:
             scan_llm = _load_or_run_scan_llm(folder, run_llm=run_llm)
         except Exception as exc:
             run_errors['scan_ocr_llm'].append({'id': gold['id'], 'fehler': type(exc).__name__})
@@ -270,7 +313,23 @@ def evaluiere_dataset(root: Path, *, run_llm=False, limit: int | None = None):
             variants['scan_ocr_llm'].append(evaluiere_befund(gold, scan_llm))
         elif (folder / 'befund_scan.pdf').exists():
             skipped['scan_ocr_llm'].append(gold['id'])
-    report = {'varianten': {}, 'fehleranalyse': {}, 'lauf_fehler': run_errors, 'nicht_evaluiert': skipped}
+        try:
+            scan_vision = _load_or_run_scan_vision_llm(folder, run_llm=run_llm)
+        except Exception as exc:
+            run_errors['scan_vision_llm'].append({'id': gold['id'], 'fehler': type(exc).__name__})
+            scan_vision = None
+        if scan_vision is not None:
+            variants['scan_vision_llm'].append(evaluiere_befund(gold, scan_vision))
+        elif (folder / 'befund_scan.pdf').exists():
+            skipped['scan_vision_llm'].append(gold['id'])
+    report = {
+        'modelle': {
+            'llm_structured_text': os.getenv('LLM_MODEL'),
+            'llm_structured_alt_model': os.getenv('LLM_ALT_MODEL'),
+            'scan_vision_llm': os.getenv('LLM_VISION_MODEL') or os.getenv('LLM_MODEL'),
+        },
+        'varianten': {}, 'fehleranalyse': {}, 'lauf_fehler': run_errors, 'nicht_evaluiert': skipped,
+    }
     for name, items in variants.items():
         report['varianten'][name] = {
             'befunde': len(items),

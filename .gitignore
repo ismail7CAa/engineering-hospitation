@@ -1,7 +1,6 @@
-# Lokale Zugangsdaten; Vorlagen ohne Geheimnisse bleiben im Repository.
+# Lokale Zugangsdaten und lokale Modellkonfiguration
 .env
 .env.*
-!.env.example
 
 # Python-Umgebungen und generierte Caches
 .venv/

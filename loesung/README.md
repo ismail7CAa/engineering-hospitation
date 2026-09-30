@@ -1,20 +1,28 @@
-# Lösung: Tag 1 – LDT und synthetische Befunde
+# Lösung – Laborbefunde aus LDT und PDF
 
-Die Lösung von der [ursprünglichen Aufgabenstellung](../README.md).
-Code, Tests, Dokumentation und erzeugte Daten liegen in diesem Ordner.
-Die bereitgestellten KBV-Dateien und die Spezifikation liegen unter `engineering-hospitation/data/`
-und `engineering-hospitation/docs/`. Es werden ausschließlich fiktive KBV- und synthetische Daten verwendet.
+Hier liegt unsere Lösung zur [ursprünglichen Aufgabenstellung](../README.md).
+Wir arbeiten bewusst im Ordner `loesung/`, damit die Originaldateien unangetastet bleiben.
+Die KBV-Testdaten und die Spezifikation liegen weiter unter `data/` und `docs/`.
+Alle eigenen Befunde sind synthetisch; echte Patientendaten werden nicht verwendet.
 
-## Ergebnisse
+## Schnellstart
 
-### Setup in fünf Befehlen
+### Setup
 
 Im Verzeichnis `loesung/` ausführen (Python 3 mit pip vorausgesetzt):
 
 ```sh
 python3 -m pip install --user uv
 python3 -m uv sync --locked
-cp -n .env.example .env
+cat > .env <<'EOF'
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=anthropic/claude-sonnet-4
+LLM_ALT_MODEL=google/gemini-2.5-flash
+LLM_VISION_MODEL=anthropic/claude-sonnet-4
+EOF
 python3 -m uv run pytest
 python3 -m uv run python -m src.check_tag1
 ```
@@ -22,7 +30,7 @@ python3 -m uv run python -m src.check_tag1
 uv stellt Python 3.12 und `.venv` bereit; `uv.lock` fixiert die Abhängigkeiten.
 In der IDE `loesung/.venv/bin/python` wählen.
 
-### Stand von Tag 1
+## Tag 1: LDT lesen und Testdaten bauen
 
 - LDT-Zeilenrahmen und Byte-Längen prüfen, ISO-8859-15 dekodieren.
 - Satz-/Objektgrenzen prüfen; Reihenfolge, Wiederholungen und Quellzeilen erhalten.
@@ -33,9 +41,9 @@ In der IDE `loesung/.venv/bin/python` wählen.
 - Eingebettete PDFs objektweise Base64-dekodieren und auf Lesbarkeit prüfen.
 - 18 Gold/LDT/PDF-Paare deterministisch erzeugen und gegenprüfen.
 
-Die Regelprüfung ist ein dokumentierter Ausschnitt des LDT-Standards, keine
-KBV-Zertifizierung. Die unterstützten Bereiche und verbleibenden Grenzen stehen
-unten und in den [Lesenotizen](docs/ldt-notizen.md).
+Die Regelprüfung deckt den für unsere Lösung relevanten Teil des LDT-Standards ab.
+Sie ist keine KBV-Zertifizierung. Details und Grenzen stehen unten und in den
+[Lesenotizen](docs/ldt-notizen.md).
 
 ### Architektur
 
@@ -93,7 +101,7 @@ das ist keine Messung einer unabhängigen PDF-Extraktion. Die Tests überprüfen
 zusätzlich byteidentische Neugenerierung in zwei getrennten Verzeichnissen.
 **Diese Zahlen sind Tag-1-Konsistenzprüfungen, und keine LLM-Evaluation.**
 
-### Befund verarbeiten
+### Einzelnen Befund verarbeiten
 
 ```sh
 python3 -m uv run python -m src.ldt_extractor ../data/ldt/kbv-testdaten/Z01_UseCase05_Befund_mitPDF.ldt --output data/extrahiert/Z01_UseCase05_Befund_mitPDF
@@ -156,8 +164,9 @@ auf die sauberen PDFs, damit der deterministische Gold-Abgleich stabil bleibt.
 
 ### Entscheidungen und Grenzen
 
-- Parsing, Datengenerierung und Validierung sind deterministisch. Ein LLM wird
-  dafür nicht benötigt; Normalisierung und medizinische Plausibilität folgen an Tag 2.
+- Parsing, Datengenerierung und LDT-Validierung sind deterministisch. Ein LLM wird
+  dafür nicht benötigt. Normalisierung, Plausibilitätsprüfung und PDF-Extraktion
+  sind in den späteren Schritten ergänzt.
 - Die eigenen Dateien deklarieren LDT 3.2.15. Alle gelieferten KBV-Dateien nennen
   3.2.19; die beiliegende Spezifikation beschreibt 3.2.15. Versionsabhängige
   Abweichungen sind daher keine bestätigten Laborfehler der KBV-Dateien.
@@ -180,31 +189,38 @@ auf die sauberen PDFs, damit der deterministische Gold-Abgleich stabil bleibt.
   unabhängige KBV-Konformitätsprüfung. Die PDF-Renderer sind bisher durch
   Seiten-/Textprüfungen geprüft, nicht durch eine manuelle visuelle Abnahme.
 
-Naechster fachlicher Schritt ist Tag 2: LLM-Vergleich, Normalisierung,
-Plausibilitaet und Varianten-Evaluation. Tag 3 bleibt fuer API, React-Review
-und Demo vorgesehen.
+Danach haben wir die PDF-Extraktion, Normalisierung, Plausibilitätsregeln,
+Evaluation, API und Review-Oberfläche ergänzt. Der aktuelle Stand ist getestet
+und die wichtigsten Ergebnisse sind hier zusammengefasst.
 
-## Start Tag 2: PDF-Extraktion mit Structured Output, Normalisierung, Plausibelisierung und Evals
+## Tag 2: PDF, LLM, Normalisierung und Evaluation
+
+An Tag 2 ging es darum, Werte aus PDFs zu extrahieren, sie auf ein gemeinsames
+Schema zu bringen, fachlich zu prüfen und die Varianten messbar zu vergleichen.
+
 ### PDF-Extraktion
 `src/laborwert_schema.py` definiert das gemeinsame Pydantic-Schema für LDT-
 und PDF-Ergebnisse: Analyt wie gedruckt, Wert, Einheit, Referenzbereich, Flag,
 Seite, Confidence und Begründung. Fehlende Angaben werden als `null` oder leere
 Listen modelliert, damit das Modell nichts erfinden muss.
 
-`src/pdf_llm_extractor.py` liest den PDF-Text seitenweise mit `pypdf`. Im Projekt wurde dafür
-tatsächlich OpenRouter mit `anthropic/claude-sonnet-4` verwendet:
+`src/pdf_llm_extractor.py` liest den PDF-Text seitenweise mit `pypdf`. Für die
+LLM-Aufrufe nutzen wir OpenRouter über die OpenAI-kompatible Schnittstelle. Das
+Modell ist per `.env` austauschbar. Für den Vergleich sind Claude und Gemini
+getrennt konfigurierbar:
 
 ```env
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_MODEL=anthropic/claude-sonnet-4
+LLM_ALT_MODEL=google/gemini-2.5-flash
+LLM_VISION_MODEL=anthropic/claude-sonnet-4
 ```
 
-Der Code unterstuetzt zwei Structured-Output-Wege: zuerst `response_format` mit
-dem Pydantic-Modell, danach als Fallback einen strikt schema-gebundenen
-Tool-Call. Dieser Fallback war für Claude über OpenRouter nötig, weil der
-Provider den direkten `response_format`-Request abgelehnt hat. Der Prompt
-verbietet Normalisierung, Umrechnung und das Erfinden fehlender Werte.
+Der Code versucht zuerst Structured Output direkt über das Pydantic-Modell. Wenn
+der Provider das nicht unterstützt, nutzt er einen strikt schema-gebundenen
+Tool-Call. Das Modell soll nur extrahieren: keine Normalisierung, keine
+Umrechnung und keine erfundenen Werte.
 
 
 ### Normalisierung
@@ -226,15 +242,14 @@ und numerischer Wert eindeutig sind.
 | CRP | CRP, C-reaktives Protein | 1988-5 | mg/l |
 | TSH | TSH, Thyreotropin | 3016-3 | mU/l |
 
-Bewusste Entscheidung: Diese Normalisierung gehört primär in deterministischen
-Code, weil Synonyme, LOINC-Codes und Umrechnungsfaktoren auditierbar und
-reproduzierbar sein müssen. Ein LLM soll keine Codes oder Faktoren erfinden.
-Sinnvoll ist ein LLM nur als Fallback für unbekannte Kürzel: Es darf dann einen
-Vorschlag mit Begründung liefern, der in die Mappingtabelle übernommen werden
-muss, bevor er produktiv wirkt. Aktuell markiert der Normalizer unbekannte
-Analyte mit `llm_fallback_erforderlich`.
+Die Normalisierung ist absichtlich deterministisch. Synonyme, LOINC-Codes und
+Umrechnungsfaktoren sollen nachvollziehbar und reproduzierbar bleiben. Ein LLM
+soll hier keine Codes oder Faktoren erfinden. Für unbekannte Kürzel wäre ein LLM
+nur als Vorschlaggeber sinnvoll; übernommen würde ein Vorschlag erst nach einer
+Änderung der Mappingtabelle. Unbekannte Analyte werden deshalb mit
+`llm_fallback_erforderlich` markiert.
 
-Beispiel:
+Nützlicher Befehl:
 
 ```sh
 python3 -m uv run python -m src.normalizer data/synthetisch/SYN-001/pdf_llm.json --output data/synthetisch/SYN-001/pdf_normalisiert.json
@@ -256,7 +271,7 @@ eindeutigem kanonischem Analyt. Numerische Vergleiche verwenden eine kleine
 Toleranz, damit Rundungsdifferenzen aus Einheitenumrechnungen nicht als
 Widerspruch zaehlen.
 
-Beispiel:
+Nützliche Befehle:
 
 ```sh
 python3 -m uv run python -m src.ldt_extractor data/synthetisch/SYN-001/befund.ldt --output data/synthetisch/SYN-001/ldt_extract
@@ -274,21 +289,29 @@ Details pro Befund.
 
 Verglichene Varianten:
 
-| Variante | Befunde | Wert+Einheit Precision/Recall | LOINC Precision/Recall | Ziel-Einheit Precision/Recall |
-| --- | ---: | ---: | ---: | ---: |
-| `regel_text_pdf` | 18 | 0.8125 / 0.8125 | 0.8125 / 0.8125 | 0.8125 / 0.8125 |
-| `llm_structured_text` | 18 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 |
-| `scan_ocr_llm` | 3 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 |
+| Variante | Befunde | Wert+Einheit P/R | LOINC P/R | Zieleinheit P/R | Flag P/R | Fehleranalyse |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `regel_text_pdf` | 18 | 0.8125 / 0.8125 | 0.8125 / 0.8125 | 0.8125 / 0.8125 | 0.8125 / 0.8125 | 27 fehlend, 27 zusätzlich |
+| `llm_structured_text` (Claude Text) | 18 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | keine |
+| `llm_structured_alt_model` (Gemini Text) | 18 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 0.8750 / 0.8750 | 18 Flag-Abweichungen |
+| `scan_ocr_llm` (OCR-Pipeline) | 3 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | keine Downstream-Fehler nach OCR-Simulation |
+| `scan_vision_llm` (Claude Vision, direkter Bild-Input) | 3 | 0.8750 / 0.8750 | 0.9583 / 0.9583 | 0.9583 / 0.9583 | 0.9583 / 0.9583 | 1 fehlend, 1 zusätzlich, 2 Einheitenfehler |
+| Gemini Vision (getestet, nicht bewertet) | 0 | nicht bewertet | nicht bewertet | nicht bewertet | nicht bewertet | erkannte Werte, lieferte aber über OpenRouter wechselnde Stringlisten statt stabiler Laborwert-Objekte |
 
 ```sh
+# gespeicherte Ausgaben auswerten
 python3 -m uv run python -m src.eval_pdf --output reports/tag2-evaluation.json
+
+# fehlende LLM-Ausgaben neu erzeugen und danach auswerten
+python3 -m uv run python -m src.eval_pdf --run-llm --output reports/tag2-evaluation.json
 ```
 
-Der aktuelle [Eval-Report](reports/tag2-evaluation.json) nutzt für die LLM-
-Variante die gespeicherten Claude/OpenRouter-Ausgaben. Die regelbasierte
-Baseline und die LLM-Variante wurden beide auf allen 18 Befunden ausgeführt.
-`SYN-018` wurde nach einem hängenden Standardlauf mit der kurzen Prompt-Variante
-erfolgreich extrahiert.
+Der aktuelle [Eval-Report](reports/tag2-evaluation.json) enthält Claude als
+Hauptmodell und Gemini als zweites Textmodell. Beide liefen auf allen 18
+Befunden. Gemini extrahiert Werte, Einheiten, LOINC und Zieleinheiten korrekt,
+weicht aber bei 18 Flags ab. Deshalb zeigen wir Flag als eigene Metrik.
+`SYN-018` wurde mit der kurzen Prompt-Variante extrahiert, weil der Standardlauf
+bei diesem zweitseitigen Befund hängen blieb.
 
 Fehleranalyse:
 
@@ -298,13 +321,29 @@ Fehleranalyse:
 - `llm_structured_text`: Auf allen 18 Befunden keine Feldfehler. Der
   Ablenkungstext `Glukose 999 mg/dl` wird ignoriert. Beim zweitseitigen
   `SYN-018` war die kurze Prompt-Variante stabiler als der Standardprompt.
-- `scan_ocr_llm`: Die drei verschmutzten Scan-PDFs laufen durch die Kette
+- `scan_ocr_llm` ist die OCR-Pipeline: Die drei verschmutzten Scan-PDFs laufen durch die Kette
   `befund_scan.pdf -> OCR -> Structured LLM Extraction -> Normalisierung ->
   Plausibilitaet/Eval`. Lokal ist kein Tesseract installiert; deshalb erzeugt
   `src/scan_ocr.py` für die selbst generierten Scan-PDFs eine deterministische
   OCR-Simulation aus den Gold-Daten. Wenn Tesseract verfügbar ist, nutzt das
   Modul echte OCR über gerenderte PDF-Seiten. Die aktuellen Zahlen messen also
   die Downstream-Kette nach OCR, nicht die Qualität einer realen OCR-Engine.
+- `scan_vision_llm` ist direkter Bild-Input an ein multimodales LLM. Claude Vision
+  wurde auf den drei Scan-PDFs erfolgreich evaluiert. Die Fehler entstehen aus
+  echter Bildinterpretation: ein Wert fehlt, ein zusätzlicher Wert wird gelesen,
+  zwei Einheiten weichen ab und ein Referenzbereich wird falsch strukturiert.
+  Damit ist der Ansatz als Alternative zur OCR-Pipeline messbar, aber aktuell
+  schwächer als Text-PDF und OCR-Simulation.
+- Gemini Vision wurde ebenfalls getestet. Das Modell erkannte die Laborwerte in
+  den Scanbildern grundsätzlich, lieferte über OpenRouter aber nicht stabil die
+  erwartete schema-konforme Tool-Struktur. Mehrfach kam `laborwerte` als Liste
+  von Strings zurück, z. B. `Krea Wert 1,0 Einheit mg/dl Referenzbereich ...`,
+  statt als Liste von Laborwert-Objekten mit `analyt`, `wert`, `einheit`,
+  `referenzen`, `flag` und `seite`. Einige dieser Formate konnten deterministisch
+  nachstrukturiert werden, die Ausgabeform wechselte aber zwischen Läufen. Deshalb
+  wurde Gemini Vision als getestete, aber nicht fair reproduzierbar bewertbare
+  Bild-Input-Variante dokumentiert; die finalen Vision-Zahlen stammen von Claude
+  Vision.
 - Normalisierung: Wenn die PDF-Extraktion stimmt, stimmen LOINC und Zieleinheit
   für die bekannten Testanalyte deterministisch. Fehler entstehen daher zuerst
   durch verfehlte oder zusätzliche PDF-Werte, nicht durch die Mappingtabelle.
@@ -316,3 +355,129 @@ python3 -m uv run python -m src.scan_ocr data/synthetisch/SYN-004/befund_scan.pd
 
 python3 -m uv run python -m src.eval_pdf --run-llm --output reports/tag2-evaluation.json
 ```
+
+## Tag 3: API, Review-Oberfläche und Demo
+
+Für Tag 3 haben wir eine kleine FastAPI und eine React-Oberfläche gebaut. Die
+API nimmt LDT- oder PDF-Dateien an und gibt geprüfte Werte zurück. LDT-Dateien
+laufen durch Parser, Regelprüfung, Normalisierung und Plausibilität. PDFs laufen
+entweder durch die regelbasierte Baseline oder, mit LLM-Haken, durch Text-LLM
+oder Vision-LLM. Eingebettete PDFs werden für die Anzeige extrahiert.
+
+| Datei | Aufgabe |
+| --- | --- |
+| `src/api.py` | FastAPI-App für Upload, geprüfte Befundwerte, PDF-Anzeige und Speichern von Review-Fällen |
+| `src/pdf_vision_extractor.py` | Scan-/Bild-PDFs als PNG rendern und per Vision-LLM in das gemeinsame Laborwertschema extrahieren |
+| `src/eval_pdf.py` | Variantenvergleich inkl. Claude Text, Gemini Text, OCR-Pipeline und Claude Vision |
+| `reports/tag2-evaluation.json` | aktueller Eval-Report mit Precision/Recall, Fehleranalyse und verwendeten Modellen |
+| `tests/test_api.py` | API-Verhalten für LDT/PDF-Upload und Review-Fall-Speicherung |
+| `tests/test_pdf_vision_extractor.py` | Rendering-Test für Scan-PDF-Seiten als Vision-Input |
+
+Für Scan-PDFs rendert `src/pdf_vision_extractor.py` die Seiten mit PyMuPDF als
+PNG-Bilder und schickt sie an ein multimodales Modell. In der App übernimmt also
+Claude Vision die OCR-Rolle. Gemini Vision wurde auch getestet, lieferte über
+OpenRouter aber keine stabil genug schema-konforme Tool-Struktur. Tesseract
+bleibt nur als Vergleichs- oder Fallback-Pipeline in `src/scan_ocr.py`.
+
+```env
+LLM_VISION_MODEL=anthropic/claude-sonnet-4
+```
+
+Backend starten:
+
+```sh
+python3 -m uv run uvicorn src.api:app --reload
+```
+
+Die Review-UI liegt unter `frontend/`. Sie lädt LDT- oder PDF-Dateien hoch,
+zeigt das Befund-PDF links und die extrahierten Werte rechts. Quelle, Confidence
+und Review-Status sind sichtbar. Auffällige Werte werden hervorgehoben und
+können bestätigt oder korrigiert werden. Gespeicherte Korrekturen landen unter
+`data/review_cases/<case_id>/review_case.json` und können später als neue
+Eval-/Gold-Fälle übernommen werden.
+
+Was beim Upload passiert:
+
+- LDT: `src.ldt_extractor` liest klinisch-chemische `Obj_0060`-Werte,
+  validiert die LDT-Struktur, extrahiert eingebettete PDFs und gibt zusätzlich
+  Normalisierung und Plausibilitätsmeldungen zurück. Andere Ergebnisarten wie
+  Humangenetik/`Obj_0073` werden sichtbar als nicht unterstützter Ergebnistyp
+  gemeldet und nicht künstlich in numerische Laborwerte umgedeutet.
+- PDF ohne LLM-Haken: Die regelbasierte Baseline `regel_text_pdf` extrahiert
+  Werte aus dem PDF-Text. Das ist schnell und lokal, aber bei zweispaltigen
+  Layouts schwächer.
+- PDF mit LLM-Haken: Bei Text-PDFs läuft `src.pdf_llm_extractor` mit Structured
+  Output. Bei Scan-/Bild-PDFs ohne extrahierbaren Text läuft automatisch
+  `src.pdf_vision_extractor` mit direktem Bild-Input an das Vision-LLM.
+- Danach laufen alle Werte durch dieselbe Normalisierung und Plausibilitätsprüfung,
+  damit LDT-, Text-PDF- und Bild-PDF-Ergebnisse vergleichbar bleiben.
+
+### Frontend: Aufbau und Ablauf
+
+Das Frontend ist absichtlich einfach aufgebaut. Es nutzt Vite, React und
+TypeScript, aber keine zusätzliche UI-Library. Die Logik liegt in `main.tsx`,
+das Styling in `styles.css`. Dadurch bleibt der Review-Flow leicht zu lesen.
+
+| Datei | Aufgabe |
+| --- | --- |
+| `frontend/package.json` | npm-Skripte und Frontend-Abhängigkeiten (`react`, `react-dom`, `vite`, `typescript`) |
+| `frontend/package-lock.json` | fixierte npm-Auflösung für reproduzierbare Installation |
+| `frontend/index.html` | HTML-Einstiegspunkt mit `#root` für React |
+| `frontend/vite.config.ts` | Vite-Konfiguration, React-Plugin, Dev-Port `5173` und Proxy zur FastAPI auf `127.0.0.1:8000` |
+| `frontend/tsconfig.json` | strikte TypeScript-Konfiguration für React/DOM-Code |
+| `frontend/src/vite-env.d.ts` | Typisierung für `VITE_API_BASE_URL` |
+| `frontend/src/main.tsx` | komplette Review-Anwendung: Upload, API-Aufruf, PDF-Anzeige, Wertetabelle, Korrekturstatus und Speichern |
+| `frontend/src/styles.css` | responsive Oberfläche, Hell/Dunkel-Farben, Tabellen-, Status- und Review-Hervorhebungen |
+
+Der Dev-Server nutzt standardmäßig den Vite-Proxy. Requests an `/befunde`,
+`/review` und `/health` werden an die FastAPI weitergeleitet. Dadurch kann das
+Frontend lokal mit relativen Pfaden arbeiten. Für andere Setups kann
+`VITE_API_BASE_URL` gesetzt werden; dann ruft die UI die API direkt über diese
+Basis-URL auf.
+
+Der Ablauf in `frontend/src/main.tsx` ist:
+
+1. Die Nutzerin wählt eine `.ldt`, `.ldtx` oder `.pdf` aus.
+2. Der Schalter `PDF per LLM` steuert den Query-Parameter `use_llm` für
+   `/befunde/extrahieren`. Bei PDF-Dateien bedeutet das: Text-PDF per Structured
+   LLM oder Scan-PDF per Vision-LLM. Bei LDT-Dateien bleibt die LDT-Extraktion
+   deterministisch.
+3. Die API-Antwort wird als `ApiResult` typisiert. Enthalten sind `laborwerte`,
+   `normalisierte_laborwerte`, `plausibilitaet`, optionale LDT-Validierung und
+   eine `pdf_url` für die Anzeige.
+4. Die linke Seite zeigt das Befund-PDF im `iframe`, wenn ein PDF vorhanden ist.
+   Bei LDT-Dateien ist das das eingebettete extrahierte PDF; bei PDF-Uploads die
+   hochgeladene Datei.
+5. Die rechte Seite zeigt die extrahierten Werte. Quelle, Analyt, Wert, Einheit,
+   Referenz/Flag, Confidence und Review-Status sind sichtbar. Werte mit niedriger
+   Confidence oder Plausibilitäts-/Validierungsmeldungen werden hervorgehoben.
+6. Jede Zeile kann bestätigt oder korrigiert werden. Änderungen an Analyt, Wert
+   oder Einheit setzen die Zeile automatisch auf `corrected`.
+7. `Korrekturen speichern` sendet die bestätigten oder korrigierten Zeilen an
+   `POST /review/faelle`. Das Backend schreibt daraus einen Review-Fall unter
+   `data/review_cases/<case_id>/review_case.json`, der später als neuer Eval- oder
+   Gold-Fall übernommen werden kann.
+
+Die UI ist ein Review-Werkzeug. Sie macht Auffälligkeiten sichtbar, korrigiert
+aber nichts automatisch. Korrekturen bleiben als Review-Daten nachvollziehbar
+gespeichert.
+
+Frontend starten:
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+Wenn das Frontend nicht über den Vite-Proxy läuft, kann die API explizit gesetzt
+werden:
+
+```sh
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
+```
+
+
+## Demo
+
+Für die Demo gibt es einen einfachen 15-Minuten-Ablauf in [docs/demo-ablauf.md](docs/demo-ablauf.md). Dort stehen die Live-Dateien, Startbefehle, Eval-Zahlen, Fehleranalyse und nächste Schritte.
