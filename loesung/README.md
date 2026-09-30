@@ -14,21 +14,15 @@ Im Verzeichnis `loesung/` ausführen (Python 3 mit pip vorausgesetzt):
 ```sh
 python3 -m pip install --user uv
 python3 -m uv sync --locked
-cat > .env <<'EOF'
-OPENAI_API_KEY=
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-LLM_API_KEY=
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=anthropic/claude-sonnet-4
-LLM_ALT_MODEL=google/gemini-2.5-flash
-LLM_VISION_MODEL=anthropic/claude-sonnet-4
-EOF
+touch .env
 python3 -m uv run pytest
 python3 -m uv run python -m src.check_tag1
 ```
 
 uv stellt Python 3.12 und `.venv` bereit; `uv.lock` fixiert die Abhängigkeiten.
-In der IDE `loesung/.venv/bin/python` wählen.
+In der IDE `loesung/.venv/bin/python` wählen. Für LLM-Läufe werden API-Key,
+Provider-URL und Modellnamen lokal in `.env` gesetzt. Die Datei bleibt privat
+und wird nicht versioniert.
 
 ## Tag 1: LDT lesen und Testdaten bauen
 
