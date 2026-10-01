@@ -39,22 +39,7 @@ Die Regelprüfung deckt den für unsere Lösung relevanten Teil des LDT-Standard
 Sie ist keine KBV-Zertifizierung. Details und Grenzen stehen unten und in den
 [Lesenotizen](docs/ldt-notizen.md).
 
-### Architektur
 
-```mermaid
-flowchart LR
-    A[LDT-Bytes] --> B[Zeilenparser und Objektbaum]
-    B --> C[Regelprüfung mit Fundstellen]
-    B --> D[Laborwerte als Pydantic-Modelle]
-    B --> E[Base64-Anhänge und PDF-Prüfung]
-    G[Gold-JSON mit festem Seed] --> L[LDT-Renderer]
-    G --> P[PDF-Renderer mit drei Layouts]
-    P --> L
-    L --> B
-    G --> V[Deterministischer Abgleich]
-    D --> V
-    E --> V
-```
 
 | Datei | Aufgabe |
 | --- | --- |
@@ -201,15 +186,6 @@ Listen modelliert, damit das Modell nichts erfinden muss.
 `src/pdf_llm_extractor.py` liest den PDF-Text seitenweise mit `pypdf`. Für die
 LLM-Aufrufe nutzen wir OpenRouter über die OpenAI-kompatible Schnittstelle. Das
 Modell ist per `.env` austauschbar. Für den Vergleich sind Claude und Gemini
-getrennt konfigurierbar:
-
-```env
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=anthropic/claude-sonnet-4
-LLM_ALT_MODEL=google/gemini-2.5-flash
-LLM_VISION_MODEL=anthropic/claude-sonnet-4
-```
 
 Der Code versucht zuerst Structured Output direkt über das Pydantic-Modell. Wenn
 der Provider das nicht unterstützt, nutzt er einen strikt schema-gebundenen
@@ -408,7 +384,7 @@ Was beim Upload passiert:
 
 ### Frontend: Aufbau und Ablauf
 
-Das Frontend ist absichtlich einfach aufgebaut. Es nutzt Vite, React und
+Das Frontend ist einfach aufgebaut. Es nutzt Vite, React und
 TypeScript, aber keine zusätzliche UI-Library. Die Logik liegt in `main.tsx`,
 das Styling in `styles.css`. Dadurch bleibt der Review-Flow leicht zu lesen.
 
@@ -456,22 +432,7 @@ Die UI ist ein Review-Werkzeug. Sie macht Auffälligkeiten sichtbar, korrigiert
 aber nichts automatisch. Korrekturen bleiben als Review-Daten nachvollziehbar
 gespeichert.
 
-Frontend starten:
-
-```sh
-cd frontend
-npm install
-npm run dev
-```
-
-Wenn das Frontend nicht über den Vite-Proxy läuft, kann die API explizit gesetzt
-werden:
-
-```sh
-VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
-```
-
 
 ## Demo
 
-Für die Demo gibt es einen einfachen 15-Minuten-Ablauf in [docs/demo-ablauf.md](docs/demo-ablauf.md). Dort stehen die Live-Dateien, Startbefehle, Eval-Zahlen, Fehleranalyse und nächste Schritte.
+Für die Demo gibt es einen einfachen Ablauf in [docs/demo-ablauf.md](docs/demo-ablauf.md). 
